@@ -282,14 +282,14 @@ function SFEOSMap() {
   const clearGeometries = useCallback((map) => {
     if (!map) return;
     
-    // First, remove all layers
+    // Remove all bbox layers
     bboxLayers.current.forEach(layerId => {
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
       }
     });
     
-    // Then, remove all sources (avoiding duplicates)
+    // Remove all bbox sources (avoiding duplicates)
     const removedSources = new Set();
     bboxLayers.current.forEach(layerId => {
       const sourceId = layerId.replace('-fill', '').replace('-line', '');
@@ -300,6 +300,24 @@ function SFEOSMap() {
     });
     
     bboxLayers.current.clear();
+    
+    // Remove item geometries
+    const layers = map.getStyle().layers || [];
+    const itemLayers = layers.filter(layer => 
+      layer.id.startsWith('item-geometry-') || 
+      layer.id.startsWith('item-outline-') ||
+      layer.id.startsWith('item-fill-')
+    );
+    
+    itemLayers.forEach(layer => {
+      if (map.getLayer(layer.id)) {
+        map.removeLayer(layer.id);
+      }
+      const sourceId = layer.source;
+      if (sourceId && map.getSource(sourceId)) {
+        map.removeSource(sourceId);
+      }
+    });
   }, []);
 
   const resetToInitialState = useCallback(() => {
@@ -624,13 +642,11 @@ function SFEOSMap() {
     const showItemThumbnailHandler = (event) => {
       try {
         const { url, title, type } = event.detail || {};
-        if (url) {
-          setThumbnail({ url, title: title || '', type: type || null });
-          // Hide details overlay when showing thumbnail
-          setItemDetails(null);
-        } else {
-          console.warn('showItemThumbnail event missing url');
-        }
+        console.log('📸 showItemThumbnail event received:', { url, title, type });
+        // Always show the overlay, even if url is missing (it will show an error message)
+        setThumbnail({ url: url || null, title: title || '', type: type || null });
+        // Hide details overlay when showing thumbnail
+        setItemDetails(null);
       } catch (e) {
         console.error('Error handling showItemThumbnail:', e);
       }
@@ -777,6 +793,24 @@ function SFEOSMap() {
     };
     window.addEventListener('runSearch', runSearchHandler);
     
+    const clearBboxHandler = () => {
+      const map = mapRef.current?.getMap();
+      if (map) {
+        console.log('🧹 Clearing bbox layer');
+        clearBboxLayer(map);
+      }
+    };
+    window.addEventListener('clearBbox', clearBboxHandler);
+    
+    const clearItemGeometriesHandler = () => {
+      const map = mapRef.current?.getMap();
+      if (map) {
+        console.log('🧹 Clearing item geometries');
+        clearGeometries(map);
+      }
+    };
+    window.addEventListener('clearItemGeometries', clearItemGeometriesHandler);
+    
     // Log the current map state
     if (map) {
       console.log('Current map state:', {
@@ -800,8 +834,10 @@ function SFEOSMap() {
       window.removeEventListener('selectedCollectionChanged', selectedCollectionChangedHandler);
       window.removeEventListener('itemLimitChanged', itemLimitChangedHandler);
       window.removeEventListener('runSearch', runSearchHandler);
+      window.removeEventListener('clearBbox', clearBboxHandler);
+      window.removeEventListener('clearItemGeometries', clearItemGeometriesHandler);
     };
-  }, [isMapLoaded, handleZoomToBbox, handleShowItemsOnMap, isDrawingBbox, clearBboxLayer, currentBbox, selectedCollectionId, currentItemLimit]);
+  }, [isMapLoaded, handleZoomToBbox, handleShowItemsOnMap, isDrawingBbox, clearBboxLayer, clearGeometries, currentBbox, selectedCollectionId, currentItemLimit]);
 
   // handleShowItemsOnMap has been moved up in the file
 
@@ -958,7 +994,7 @@ function SFEOSMap() {
         </div>
       </div>
       <LogoOverlay />
-      {thumbnail.url && (
+      {thumbnail.title && (
         <ThumbnailOverlay 
           url={thumbnail.url} 
           title={thumbnail.title}

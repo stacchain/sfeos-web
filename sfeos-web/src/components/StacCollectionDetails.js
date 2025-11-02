@@ -210,14 +210,27 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     return features.map(item => {
       let thumbnailUrl = null;
       let thumbnailType = null;
+      console.log('🔍 Processing item:', item.id);
+      console.log('   Assets:', Object.keys(item.assets || {}));
       try {
         const assets = item.assets || {};
         const assetsArr = Object.values(assets);
+        
+        // Step 1: Check for assets.thumbnail
+        console.log('   Step 1 - Check assets.thumbnail:', !!assets.thumbnail);
+        if (assets.thumbnail) {
+          console.log('   assets.thumbnail object:', assets.thumbnail);
+          console.log('   assets.thumbnail.href:', assets.thumbnail.href);
+        }
         if (assets.thumbnail && assets.thumbnail.href) {
           thumbnailUrl = assets.thumbnail.href;
           thumbnailType = assets.thumbnail.type || null;
+          console.log('   ✅ Found thumbnail in assets.thumbnail:', thumbnailUrl);
         }
+        
+        // Step 2: Search for asset with role 'thumbnail' and image type
         if (!thumbnailUrl) {
+          console.log('   Step 2 - Search for thumbnail role with image type');
           const thumbAssetWeb = assetsArr.find(a => {
             const roles = Array.isArray(a.roles) ? a.roles : [];
             const type = (a.type || '').toLowerCase();
@@ -226,9 +239,13 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           if (thumbAssetWeb) {
             thumbnailUrl = thumbAssetWeb.href;
             thumbnailType = thumbAssetWeb.type || null;
+            console.log('   ✅ Found thumbnail with role and image type:', thumbnailUrl);
           }
         }
+        
+        // Step 3: Search for any asset with role 'thumbnail'
         if (!thumbnailUrl) {
+          console.log('   Step 3 - Search for any thumbnail role');
           const thumbAny = assetsArr.find(a => {
             const roles = Array.isArray(a.roles) ? a.roles : [];
             return roles.includes('thumbnail') && a.href;
@@ -236,14 +253,23 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           if (thumbAny) {
             thumbnailUrl = thumbAny.href;
             thumbnailType = thumbAny.type || null;
+            console.log('   ✅ Found thumbnail with role:', thumbnailUrl);
           }
         }
+        
+        // Step 4: Check links for thumbnail
         if (!thumbnailUrl && Array.isArray(item.links)) {
+          console.log('   Step 4 - Search links for thumbnail');
           const link = item.links.find(l => l.rel === 'thumbnail' || l.rel === 'preview');
           if (link && link.href) {
             thumbnailUrl = link.href;
             thumbnailType = link.type || null;
+            console.log('   ✅ Found thumbnail in links:', thumbnailUrl);
           }
+        }
+        
+        if (!thumbnailUrl) {
+          console.log('   ❌ No thumbnail found after all steps');
         }
       } catch (e) {
         console.warn('Error extracting thumbnail:', e);
@@ -256,7 +282,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
         thumbnailUrl,
         thumbnailType,
         datetime: item.properties?.datetime || item.properties?.start_datetime || null,
-        assetsCount: Object.keys(item.assets || {}).length
+        assetsCount: Object.keys(item.assets || {}).length,
+        assets: item.assets || {} // Keep raw assets for fallback
       };
     });
   };
@@ -413,6 +440,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
   const handleEyeButtonClick = (e, item) => {
     e.stopPropagation();
     
+    console.log('👁 Eye button clicked for item:', item.id);
+    
     // Toggle thumbnail visibility for this item
     if (visibleThumbnailItemId === item.id) {
       // Hide thumbnail
@@ -428,25 +457,56 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
       // Show thumbnail
       setVisibleThumbnailItemId(item.id);
       
-      // Hide item geometries on the map by dispatching empty items event
-      const hideGeometriesEvent = new CustomEvent('showItemsOnMap', {
-        detail: { items: [] }
-      });
-      console.log('Hiding item geometries for thumbnail overlay');
-      window.dispatchEvent(hideGeometriesEvent);
+      // Extract thumbnail URL - try multiple sources
+      let thumbnailUrl = null;
+      let thumbnailType = null;
       
-      // Show thumbnail overlay if available
-      if (item.thumbnailUrl) {
-        const thumbEvent = new CustomEvent('showItemThumbnail', {
-          detail: {
-            url: item.thumbnailUrl,
-            title: item.title || item.id,
-            type: item.thumbnailType || null
-          }
-        });
-        console.log('Dispatching showItemThumbnail with URL:', item.thumbnailUrl);
-        window.dispatchEvent(thumbEvent);
+      // Try 1: Check assets.thumbnail
+      if (item.assets && item.assets.thumbnail && item.assets.thumbnail.href) {
+        thumbnailUrl = item.assets.thumbnail.href;
+        thumbnailType = item.assets.thumbnail.type;
+        console.log('✅ Found thumbnail in assets.thumbnail:', thumbnailUrl);
       }
+      
+      // Try 2: Search for any asset with role 'thumbnail'
+      if (!thumbnailUrl && item.assets) {
+        const thumbAsset = Object.values(item.assets).find(a => 
+          Array.isArray(a.roles) && a.roles.includes('thumbnail') && a.href
+        );
+        if (thumbAsset) {
+          thumbnailUrl = thumbAsset.href;
+          thumbnailType = thumbAsset.type;
+          console.log('✅ Found thumbnail in assets with role:', thumbnailUrl);
+        }
+      }
+      
+      // Try 3: Check links for thumbnail
+      if (!thumbnailUrl && item.links) {
+        const thumbLink = item.links.find(l => 
+          (l.rel === 'thumbnail' || l.rel === 'preview') && l.href
+        );
+        if (thumbLink) {
+          thumbnailUrl = thumbLink.href;
+          thumbnailType = thumbLink.type;
+          console.log('✅ Found thumbnail in links:', thumbnailUrl);
+        }
+      }
+      
+      console.log('🖼️ Thumbnail URL for item', item.id, ':', thumbnailUrl);
+      
+      // Clear the item geometries from the map to hide the red square
+      window.dispatchEvent(new CustomEvent('clearItemGeometries'));
+      
+      // Dispatch the thumbnail event - this will show the overlay
+      const thumbEvent = new CustomEvent('showItemThumbnail', {
+        detail: {
+          url: thumbnailUrl || null,
+          title: item.title || item.id,
+          type: thumbnailType || null
+        }
+      });
+      console.log('Dispatching showItemThumbnail event');
+      window.dispatchEvent(thumbEvent);
 
       // Show thumbnail on map if available and has geometry
       if (item.thumbnailUrl && item.geometry) {
@@ -654,9 +714,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                     <span className="item-title">{item.title}</span>
                     <button
                       className={`preview-btn ${visibleThumbnailItemId === item.id ? 'active' : ''}`}
-                      title={item.thumbnailUrl ? (visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail') : 'No thumbnail available'}
-                      aria-label={item.thumbnailUrl ? (visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail') : 'No thumbnail available'}
-                      disabled={!item.thumbnailUrl}
+                      title={visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail'}
+                      aria-label={visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail'}
                       onClick={(e) => handleEyeButtonClick(e, item)}
                     >
                       👁
@@ -757,6 +816,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                   setIsDatetimePickerOpen(false);
                   // Dispatch event so SFEOSMap can use the datetime filter in bbox searches
                   window.dispatchEvent(new CustomEvent('datetimeFilterChanged', { detail: { datetimeFilter } }));
+                  // Trigger refetch with the new datetime filter
+                  window.dispatchEvent(new CustomEvent('refetchQueryItems', { detail: { limit: itemLimitRef.current } }));
                 }}
               >
                 Apply
@@ -771,6 +832,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                   setAppliedDatetimeFilter('');
                   // Dispatch event so SFEOSMap knows the datetime filter was cleared
                   window.dispatchEvent(new CustomEvent('datetimeFilterChanged', { detail: { datetimeFilter: '' } }));
+                  // Trigger refetch without datetime filter
+                  window.dispatchEvent(new CustomEvent('refetchQueryItems', { detail: { limit: itemLimitRef.current } }));
                 }}
               >
                 Clear

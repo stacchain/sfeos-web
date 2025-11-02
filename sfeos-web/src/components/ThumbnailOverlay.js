@@ -4,10 +4,8 @@ import './ThumbnailOverlay.css';
 function ThumbnailOverlay({ url, title, type, onClose }) {
   const [imageError, setImageError] = useState(false);
 
-  if (!url) return null;
-
   const lowerType = (type || '').toLowerCase();
-  const isWebImage = lowerType.startsWith('image/jpeg') || lowerType.startsWith('image/png') || /\.(jpg|jpeg|png)(\?|$)/i.test(url);
+  const isWebImage = url && (lowerType.startsWith('image/jpeg') || lowerType.startsWith('image/png') || /\.(jpg|jpeg|png)(\?|$)/i.test(url));
 
   return (
     <div className="thumbnail-overlay" role="dialog" aria-label="Item thumbnail">
@@ -31,6 +29,10 @@ function ThumbnailOverlay({ url, title, type, onClose }) {
                 onError={() => setImageError(true)}
               />
             )
+          ) : !url ? (
+            <div className="thumbnail-error">
+              <div className="thumbnail-note">No thumbnail URL available for this item.</div>
+            </div>
           ) : (
             <div>
               <div className="thumbnail-note">This app doesn't support inline preview for this image type yet{type ? ` (${type})` : ''}.</div>
