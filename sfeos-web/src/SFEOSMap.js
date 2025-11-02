@@ -55,6 +55,7 @@ function SFEOSMap() {
   const containerRef = useRef(null);
   const bboxLayers = useRef(new Set()); // Track bounding box layer IDs
   const stacApiUrlRef = useRef(stacApiUrl);
+  const appliedDatetimeFilterRef = useRef(''); // Track datetime filter from StacCollectionDetails
 
   useEffect(() => {
     stacApiUrlRef.current = stacApiUrl;
@@ -197,6 +198,22 @@ function SFEOSMap() {
     };
   }, []);
 
+  // Listen for datetime filter changes from StacCollectionDetails
+  useEffect(() => {
+    const handleDatetimeFilterChanged = (event) => {
+      const datetimeFilter = event?.detail?.datetimeFilter || '';
+      appliedDatetimeFilterRef.current = datetimeFilter;
+      console.log('📅 Datetime filter event received in SFEOSMap');
+      console.log('   Filter value:', datetimeFilter);
+      console.log('   Ref now contains:', appliedDatetimeFilterRef.current);
+    };
+
+    window.addEventListener('datetimeFilterChanged', handleDatetimeFilterChanged);
+    return () => {
+      window.removeEventListener('datetimeFilterChanged', handleDatetimeFilterChanged);
+    };
+  }, []);
+
   
   // Function to add a geometry to the map
   const addGeometry = useCallback((map, id, geometry, color = '#FF0000', width = 2) => {
@@ -265,18 +282,42 @@ function SFEOSMap() {
   const clearGeometries = useCallback((map) => {
     if (!map) return;
     
-    // Remove all layers and sources that start with 'geometry-'
+    // Remove all bbox layers
     bboxLayers.current.forEach(layerId => {
       if (map.getLayer(layerId)) {
         map.removeLayer(layerId);
       }
+    });
+    
+    // Remove all bbox sources (avoiding duplicates)
+    const removedSources = new Set();
+    bboxLayers.current.forEach(layerId => {
       const sourceId = layerId.replace('-fill', '').replace('-line', '');
-      if (map.getSource(sourceId)) {
+      if (!removedSources.has(sourceId) && map.getSource(sourceId)) {
         map.removeSource(sourceId);
+        removedSources.add(sourceId);
       }
     });
     
     bboxLayers.current.clear();
+    
+    // Remove item geometries
+    const layers = map.getStyle().layers || [];
+    const itemLayers = layers.filter(layer => 
+      layer.id.startsWith('item-geometry-') || 
+      layer.id.startsWith('item-outline-') ||
+      layer.id.startsWith('item-fill-')
+    );
+    
+    itemLayers.forEach(layer => {
+      if (map.getLayer(layer.id)) {
+        map.removeLayer(layer.id);
+      }
+      const sourceId = layer.source;
+      if (sourceId && map.getSource(sourceId)) {
+        map.removeSource(sourceId);
+      }
+    });
   }, []);
 
   const resetToInitialState = useCallback(() => {
@@ -601,13 +642,11 @@ function SFEOSMap() {
     const showItemThumbnailHandler = (event) => {
       try {
         const { url, title, type } = event.detail || {};
-        if (url) {
-          setThumbnail({ url, title: title || '', type: type || null });
-          // Hide details overlay when showing thumbnail
-          setItemDetails(null);
-        } else {
-          console.warn('showItemThumbnail event missing url');
-        }
+        console.log('📸 showItemThumbnail event received:', { url, title, type });
+        // Always show the overlay, even if url is missing (it will show an error message)
+        setThumbnail({ url: url || null, title: title || '', type: type || null });
+        // Hide details overlay when showing thumbnail
+        setItemDetails(null);
       } catch (e) {
         console.error('Error handling showItemThumbnail:', e);
       }
@@ -722,14 +761,25 @@ function SFEOSMap() {
           const bboxParam = bbox.map(n => Number(n)).join(',');
           console.log('Search params - bbox:', bboxParam, 'limit:', lim, 'collection:', selectedCollectionId);
           const baseUrl = stacApiUrlRef.current;
-          const url = `${baseUrl}/search?collections=${encodeURIComponent(selectedCollectionId)}&bbox=${encodeURIComponent(bboxParam)}&limit=${encodeURIComponent(lim)}`;
-          console.log('Search URL:', url);
+          let url = `${baseUrl}/search?collections=${encodeURIComponent(selectedCollectionId)}&bbox=${encodeURIComponent(bboxParam)}&limit=${encodeURIComponent(lim)}`;
+          console.log('📅 Datetime filter ref value:', appliedDatetimeFilterRef.current);
+          if (appliedDatetimeFilterRef.current) {
+            url += `&datetime=${encodeURIComponent(appliedDatetimeFilterRef.current)}`;
+            console.log('✅ Datetime filter ADDED to URL');
+          } else {
+            console.log('⚠️ Datetime filter is EMPTY');
+          }
+          console.log('%c🔗 FULL API CALL:', 'color: blue; font-weight: bold; font-size: 14px;');
+          console.log('%cGET ' + url, 'color: green; font-family: monospace; font-size: 12px;');
           window.dispatchEvent(new CustomEvent('hideOverlays'));
           const resp = await fetch(url, { method: 'GET' });
           if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
           const data = await resp.json();
           const features = Array.isArray(data.features) ? data.features : [];
-          console.log('Search returned', features.length, 'features');
+          console.log('%c📊 SEARCH RESULTS:', 'color: purple; font-weight: bold;');
+          console.log('Features returned:', features.length);
+          console.log('numberReturned:', data.numberReturned);
+          console.log('numberMatched:', data.numberMatched);
           window.dispatchEvent(new CustomEvent('showItemsOnMap', { detail: { items: features, numberReturned: data.numberReturned, numberMatched: data.numberMatched } }));
           window.dispatchEvent(new CustomEvent('zoomToBbox', { detail: { bbox } }));
         } else {
@@ -742,6 +792,24 @@ function SFEOSMap() {
       }
     };
     window.addEventListener('runSearch', runSearchHandler);
+    
+    const clearBboxHandler = () => {
+      const map = mapRef.current?.getMap();
+      if (map) {
+        console.log('🧹 Clearing bbox layer');
+        clearBboxLayer(map);
+      }
+    };
+    window.addEventListener('clearBbox', clearBboxHandler);
+    
+    const clearItemGeometriesHandler = () => {
+      const map = mapRef.current?.getMap();
+      if (map) {
+        console.log('🧹 Clearing item geometries');
+        clearGeometries(map);
+      }
+    };
+    window.addEventListener('clearItemGeometries', clearItemGeometriesHandler);
     
     // Log the current map state
     if (map) {
@@ -766,8 +834,10 @@ function SFEOSMap() {
       window.removeEventListener('selectedCollectionChanged', selectedCollectionChangedHandler);
       window.removeEventListener('itemLimitChanged', itemLimitChangedHandler);
       window.removeEventListener('runSearch', runSearchHandler);
+      window.removeEventListener('clearBbox', clearBboxHandler);
+      window.removeEventListener('clearItemGeometries', clearItemGeometriesHandler);
     };
-  }, [isMapLoaded, handleZoomToBbox, handleShowItemsOnMap, isDrawingBbox, clearBboxLayer, currentBbox, selectedCollectionId, currentItemLimit]);
+  }, [isMapLoaded, handleZoomToBbox, handleShowItemsOnMap, isDrawingBbox, clearBboxLayer, clearGeometries, currentBbox, selectedCollectionId, currentItemLimit]);
 
   // handleShowItemsOnMap has been moved up in the file
 
@@ -839,7 +909,16 @@ function SFEOSMap() {
             const bboxParam = bbox.map(n => Number(n)).join(',');
             const limitParam = currentItemLimit;
             const baseUrl = stacApiUrlRef.current;
-            const url = `${baseUrl}/search?collections=${encodeURIComponent(selectedCollectionId)}&bbox=${encodeURIComponent(bboxParam)}&limit=${encodeURIComponent(limitParam)}`;
+            let url = `${baseUrl}/search?collections=${encodeURIComponent(selectedCollectionId)}&bbox=${encodeURIComponent(bboxParam)}&limit=${encodeURIComponent(limitParam)}`;
+            console.log('📅 Datetime filter ref value (onMouseUp):', appliedDatetimeFilterRef.current);
+            if (appliedDatetimeFilterRef.current) {
+              url += `&datetime=${encodeURIComponent(appliedDatetimeFilterRef.current)}`;
+              console.log('✅ Datetime filter ADDED to URL');
+            } else {
+              console.log('⚠️ Datetime filter is EMPTY');
+            }
+            console.log('%c🔗 FULL API CALL (onMouseUp):', 'color: blue; font-weight: bold; font-size: 14px;');
+            console.log('%cGET ' + url, 'color: green; font-family: monospace; font-size: 12px;');
             window.dispatchEvent(new CustomEvent('hideOverlays'));
             const resp = await fetch(url, { method: 'GET' });
             if (!resp.ok) throw new Error(`Search failed: ${resp.status}`);
@@ -915,7 +994,7 @@ function SFEOSMap() {
         </div>
       </div>
       <LogoOverlay />
-      {thumbnail.url && (
+      {thumbnail.title && (
         <ThumbnailOverlay 
           url={thumbnail.url} 
           title={thumbnail.title}

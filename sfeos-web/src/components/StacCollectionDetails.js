@@ -35,6 +35,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     appliedDatetimeFilterRef.current = appliedDatetimeFilter;
   }, [appliedDatetimeFilter]);
 
+
+
   // Detect collection changes and reset state
   useEffect(() => {
     if (collection && collection.id && prevCollectionId.current !== collection.id) {
@@ -73,71 +75,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             setNumberMatched(data.numberMatched || data.features?.length || 0);
             
             if (data.features && data.features.length > 0) {
-              const limit = itemLimitRef.current;
-              const items = data.features.slice(0, limit).map(item => {
-                // Determine thumbnail URL from assets or links
-                let thumbnailUrl = null;
-                let thumbnailType = null;
-                try {
-                  const assets = item.assets || {};
-                  const assetsArr = Object.values(assets);
-
-                  // 1) Prefer explicit assets.thumbnail if it's JPEG/PNG
-                  if (assets.thumbnail && assets.thumbnail.href) {
-                    thumbnailUrl = assets.thumbnail.href;
-                    thumbnailType = assets.thumbnail.type || null;
-                  }
-
-                  // 2) Prefer any asset with role 'thumbnail' that is JPEG/PNG
-                  if (!thumbnailUrl) {
-                    const thumbAssetWeb = assetsArr.find(a => {
-                      const roles = Array.isArray(a.roles) ? a.roles : [];
-                      const type = (a.type || '').toLowerCase();
-                      return roles.includes('thumbnail') && (type.startsWith('image/jpeg') || type.startsWith('image/png'));
-                    });
-                    if (thumbAssetWeb) {
-                      thumbnailUrl = thumbAssetWeb.href;
-                      thumbnailType = thumbAssetWeb.type || null;
-                    }
-                  }
-
-                  // 3) If only TIFF thumbnail exists, use it as a last resort
-                  if (!thumbnailUrl) {
-                    const thumbAny = assetsArr.find(a => {
-                      const roles = Array.isArray(a.roles) ? a.roles : [];
-                      return roles.includes('thumbnail') && a.href;
-                    });
-                    if (thumbAny) {
-                      thumbnailUrl = thumbAny.href;
-                      thumbnailType = thumbAny.type || null;
-                    }
-                  }
-
-                  // 4) Fallback to links with rel=thumbnail or rel=preview
-                  if (!thumbnailUrl && Array.isArray(item.links)) {
-                    const link = item.links.find(l => l.rel === 'thumbnail' || l.rel === 'preview');
-                    if (link && link.href) {
-                      thumbnailUrl = link.href;
-                      thumbnailType = link.type || null;
-                    }
-                  }
-                } catch (e) {
-                  console.warn('Error extracting thumbnail from assets/links for item', item.id, e);
-                }
-
-                const itemData = {
-                  id: item.id,
-                  title: item.properties?.title || item.id,
-                  geometry: item.geometry || null,
-                  bbox: item.bbox || null,
-                  thumbnailUrl,
-                  thumbnailType,
-                  datetime: item.properties?.datetime || item.properties?.start_datetime || null,
-                  assetsCount: Object.keys(item.assets || {}).length
-                };
-                console.log(`Item ${itemData.id} geometry:`, itemData.geometry, 'thumbnail:', { url: thumbnailUrl, type: thumbnailType });
-                return itemData;
-              });
+              const items = processItems(data.features);
               
               console.log('Setting query items:', items);
               setQueryItems(items);
@@ -196,7 +134,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
         
         console.log('🔎 refetchQueryItems triggered with limit:', lim);
         const baseUrl = stacApiUrlRef.current || process.env.REACT_APP_STAC_API_BASE_URL || 'http://localhost:8080';
-        const url = `${baseUrl}/collections/${collection.id}/items?limit=${lim}`;
+        const datetimeFilter = appliedDatetimeFilterRef.current;
+        const url = buildItemsUrl(baseUrl, collection.id, lim, datetimeFilter);
         console.log('Fetching from:', url);
         
         const response = await fetch(url);
@@ -211,58 +150,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           
           if (data.features && data.features.length > 0) {
             console.log('Processing', data.features.length, 'features');
-            const items = data.features.map(item => {
-              let thumbnailUrl = null;
-              let thumbnailType = null;
-              try {
-                const assets = item.assets || {};
-                const assetsArr = Object.values(assets);
-                if (assets.thumbnail && assets.thumbnail.href) {
-                  thumbnailUrl = assets.thumbnail.href;
-                  thumbnailType = assets.thumbnail.type || null;
-                }
-                if (!thumbnailUrl) {
-                  const thumbAssetWeb = assetsArr.find(a => {
-                    const roles = Array.isArray(a.roles) ? a.roles : [];
-                    const type = (a.type || '').toLowerCase();
-                    return roles.includes('thumbnail') && (type.startsWith('image/jpeg') || type.startsWith('image/png'));
-                  });
-                  if (thumbAssetWeb) {
-                    thumbnailUrl = thumbAssetWeb.href;
-                    thumbnailType = thumbAssetWeb.type || null;
-                  }
-                }
-                if (!thumbnailUrl) {
-                  const thumbAny = assetsArr.find(a => {
-                    const roles = Array.isArray(a.roles) ? a.roles : [];
-                    return roles.includes('thumbnail') && a.href;
-                  });
-                  if (thumbAny) {
-                    thumbnailUrl = thumbAny.href;
-                    thumbnailType = thumbAny.type || null;
-                  }
-                }
-                if (!thumbnailUrl && Array.isArray(item.links)) {
-                  const link = item.links.find(l => l.rel === 'thumbnail' || l.rel === 'preview');
-                  if (link && link.href) {
-                    thumbnailUrl = link.href;
-                    thumbnailType = link.type || null;
-                  }
-                }
-              } catch (e) {
-                console.warn('Error extracting thumbnail:', e);
-              }
-              return {
-                id: item.id,
-                title: item.properties?.title || item.id,
-                geometry: item.geometry || null,
-                bbox: item.bbox || null,
-                thumbnailUrl,
-                thumbnailType,
-                datetime: item.properties?.datetime || item.properties?.start_datetime || null,
-                assetsCount: Object.keys(item.assets || {}).length
-              };
-            });
+            const items = processItems(data.features);
             console.log('🔎 Fetched', items.length, 'items');
             setQueryItems(items);
             setSelectedItemId(null);
@@ -283,16 +171,25 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     return () => window.removeEventListener('refetchQueryItems', handler);
   }, [collection]);
 
-  // Listen for showItemsOnMap event to capture search result counts
+  // Listen for showItemsOnMap event to capture search result counts and update items list
   useEffect(() => {
     const handler = (event) => {
       const numberReturned = event?.detail?.numberReturned;
       const numberMatched = event?.detail?.numberMatched;
+      const items = event?.detail?.items;
+      
       if (numberReturned !== undefined) {
         setNumberReturned(numberReturned);
       }
       if (numberMatched !== undefined) {
         setNumberMatched(numberMatched);
+      }
+      
+      // Update query items list when bbox search returns results
+      if (Array.isArray(items)) {
+        const processedItems = processItems(items);
+        setQueryItems(processedItems);
+        console.log('Query items updated from showItemsOnMap event:', processedItems.length, 'items');
       }
     };
     window.addEventListener('showItemsOnMap', handler);
@@ -313,14 +210,27 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     return features.map(item => {
       let thumbnailUrl = null;
       let thumbnailType = null;
+      console.log('🔍 Processing item:', item.id);
+      console.log('   Assets:', Object.keys(item.assets || {}));
       try {
         const assets = item.assets || {};
         const assetsArr = Object.values(assets);
+        
+        // Step 1: Check for assets.thumbnail
+        console.log('   Step 1 - Check assets.thumbnail:', !!assets.thumbnail);
+        if (assets.thumbnail) {
+          console.log('   assets.thumbnail object:', assets.thumbnail);
+          console.log('   assets.thumbnail.href:', assets.thumbnail.href);
+        }
         if (assets.thumbnail && assets.thumbnail.href) {
           thumbnailUrl = assets.thumbnail.href;
           thumbnailType = assets.thumbnail.type || null;
+          console.log('   ✅ Found thumbnail in assets.thumbnail:', thumbnailUrl);
         }
+        
+        // Step 2: Search for asset with role 'thumbnail' and image type
         if (!thumbnailUrl) {
+          console.log('   Step 2 - Search for thumbnail role with image type');
           const thumbAssetWeb = assetsArr.find(a => {
             const roles = Array.isArray(a.roles) ? a.roles : [];
             const type = (a.type || '').toLowerCase();
@@ -329,9 +239,13 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           if (thumbAssetWeb) {
             thumbnailUrl = thumbAssetWeb.href;
             thumbnailType = thumbAssetWeb.type || null;
+            console.log('   ✅ Found thumbnail with role and image type:', thumbnailUrl);
           }
         }
+        
+        // Step 3: Search for any asset with role 'thumbnail'
         if (!thumbnailUrl) {
+          console.log('   Step 3 - Search for any thumbnail role');
           const thumbAny = assetsArr.find(a => {
             const roles = Array.isArray(a.roles) ? a.roles : [];
             return roles.includes('thumbnail') && a.href;
@@ -339,14 +253,23 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           if (thumbAny) {
             thumbnailUrl = thumbAny.href;
             thumbnailType = thumbAny.type || null;
+            console.log('   ✅ Found thumbnail with role:', thumbnailUrl);
           }
         }
+        
+        // Step 4: Check links for thumbnail
         if (!thumbnailUrl && Array.isArray(item.links)) {
+          console.log('   Step 4 - Search links for thumbnail');
           const link = item.links.find(l => l.rel === 'thumbnail' || l.rel === 'preview');
           if (link && link.href) {
             thumbnailUrl = link.href;
             thumbnailType = link.type || null;
+            console.log('   ✅ Found thumbnail in links:', thumbnailUrl);
           }
+        }
+        
+        if (!thumbnailUrl) {
+          console.log('   ❌ No thumbnail found after all steps');
         }
       } catch (e) {
         console.warn('Error extracting thumbnail:', e);
@@ -359,7 +282,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
         thumbnailUrl,
         thumbnailType,
         datetime: item.properties?.datetime || item.properties?.start_datetime || null,
-        assetsCount: Object.keys(item.assets || {}).length
+        assetsCount: Object.keys(item.assets || {}).length,
+        assets: item.assets || {} // Keep raw assets for fallback
       };
     });
   };
@@ -516,6 +440,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
   const handleEyeButtonClick = (e, item) => {
     e.stopPropagation();
     
+    console.log('👁 Eye button clicked for item:', item.id);
+    
     // Toggle thumbnail visibility for this item
     if (visibleThumbnailItemId === item.id) {
       // Hide thumbnail
@@ -531,25 +457,56 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
       // Show thumbnail
       setVisibleThumbnailItemId(item.id);
       
-      // Hide item geometries on the map by dispatching empty items event
-      const hideGeometriesEvent = new CustomEvent('showItemsOnMap', {
-        detail: { items: [] }
-      });
-      console.log('Hiding item geometries for thumbnail overlay');
-      window.dispatchEvent(hideGeometriesEvent);
+      // Extract thumbnail URL - try multiple sources
+      let thumbnailUrl = null;
+      let thumbnailType = null;
       
-      // Show thumbnail overlay if available
-      if (item.thumbnailUrl) {
-        const thumbEvent = new CustomEvent('showItemThumbnail', {
-          detail: {
-            url: item.thumbnailUrl,
-            title: item.title || item.id,
-            type: item.thumbnailType || null
-          }
-        });
-        console.log('Dispatching showItemThumbnail with URL:', item.thumbnailUrl);
-        window.dispatchEvent(thumbEvent);
+      // Try 1: Check assets.thumbnail
+      if (item.assets && item.assets.thumbnail && item.assets.thumbnail.href) {
+        thumbnailUrl = item.assets.thumbnail.href;
+        thumbnailType = item.assets.thumbnail.type;
+        console.log('✅ Found thumbnail in assets.thumbnail:', thumbnailUrl);
       }
+      
+      // Try 2: Search for any asset with role 'thumbnail'
+      if (!thumbnailUrl && item.assets) {
+        const thumbAsset = Object.values(item.assets).find(a => 
+          Array.isArray(a.roles) && a.roles.includes('thumbnail') && a.href
+        );
+        if (thumbAsset) {
+          thumbnailUrl = thumbAsset.href;
+          thumbnailType = thumbAsset.type;
+          console.log('✅ Found thumbnail in assets with role:', thumbnailUrl);
+        }
+      }
+      
+      // Try 3: Check links for thumbnail
+      if (!thumbnailUrl && item.links) {
+        const thumbLink = item.links.find(l => 
+          (l.rel === 'thumbnail' || l.rel === 'preview') && l.href
+        );
+        if (thumbLink) {
+          thumbnailUrl = thumbLink.href;
+          thumbnailType = thumbLink.type;
+          console.log('✅ Found thumbnail in links:', thumbnailUrl);
+        }
+      }
+      
+      console.log('🖼️ Thumbnail URL for item', item.id, ':', thumbnailUrl);
+      
+      // Clear the item geometries from the map to hide the red square
+      window.dispatchEvent(new CustomEvent('clearItemGeometries'));
+      
+      // Dispatch the thumbnail event - this will show the overlay
+      const thumbEvent = new CustomEvent('showItemThumbnail', {
+        detail: {
+          url: thumbnailUrl || null,
+          title: item.title || item.id,
+          type: thumbnailType || null
+        }
+      });
+      console.log('Dispatching showItemThumbnail event');
+      window.dispatchEvent(thumbEvent);
 
       // Show thumbnail on map if available and has geometry
       if (item.thumbnailUrl && item.geometry) {
@@ -743,7 +700,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                 📅
               </button>
             </div>
-            {(() => { console.log('Rendering Query Items list with', queryItems.length, 'items'); return queryItems.length > 0; })() ? (
+            {queryItems.length > 0 ? (
               <ul>
                 {queryItems.map(item => (
                   <li 
@@ -757,9 +714,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                     <span className="item-title">{item.title}</span>
                     <button
                       className={`preview-btn ${visibleThumbnailItemId === item.id ? 'active' : ''}`}
-                      title={item.thumbnailUrl ? (visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail') : 'No thumbnail available'}
-                      aria-label={item.thumbnailUrl ? (visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail') : 'No thumbnail available'}
-                      disabled={!item.thumbnailUrl}
+                      title={visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail'}
+                      aria-label={visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail'}
                       onClick={(e) => handleEyeButtonClick(e, item)}
                     >
                       👁
@@ -845,61 +801,23 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                   if (formattedStart && formattedEnd) {
                     datetimeFilter = `${formattedStart}/${formattedEnd}`;
                   } else if (formattedStart) {
-                    datetimeFilter = `${formattedStart}/..`;
+                    // Open-ended range: from start date to year 2200
+                    datetimeFilter = `${formattedStart}/2200-12-31T23:59:59Z`;
                   } else if (formattedEnd) {
-                    datetimeFilter = `../${formattedEnd}`;
+                    // Open-ended range: from year 1800 to end date
+                    datetimeFilter = `1800-01-01T00:00:00Z/${formattedEnd}`;
+                  } else {
+                    // If neither start nor end date is selected, don't apply any filter
+                    datetimeFilter = '';
                   }
                   
                   console.log('Datetime filter applied:', { startDate, endDate, formattedStart, formattedEnd, datetimeFilter });
                   setAppliedDatetimeFilter(datetimeFilter);
                   setIsDatetimePickerOpen(false);
-                  
+                  // Dispatch event so SFEOSMap can use the datetime filter in bbox searches
+                  window.dispatchEvent(new CustomEvent('datetimeFilterChanged', { detail: { datetimeFilter } }));
                   // Trigger refetch with the new datetime filter
-                  if (collection && collection.id) {
-                    const baseUrl = stacApiUrlRef.current || process.env.REACT_APP_STAC_API_BASE_URL || 'http://localhost:8080';
-                    const url = buildItemsUrl(baseUrl, collection.id, itemLimitRef.current, datetimeFilter);
-                    console.log('Fetching items with datetime filter from:', url);
-                    
-                    fetch(url)
-                      .then(response => {
-                        if (response.ok) {
-                          return response.json();
-                        } else {
-                          return response.text().then(text => {
-                            throw new Error(`Failed to fetch: ${response.status} - ${text}`);
-                          });
-                        }
-                      })
-                      .then(data => {
-                        console.log('Received filtered items data:', data);
-                        setNumberReturned(data.numberReturned || data.features?.length || 0);
-                        setNumberMatched(data.numberMatched || data.features?.length || 0);
-                        
-                        if (data.features && data.features.length > 0) {
-                          const items = processItems(data.features);
-                          console.log('Setting filtered query items:', items);
-                          setQueryItems(items);
-                          setSelectedItemId(null);
-                          
-                          // Show filtered items on map
-                          if (onShowItemsOnMap) {
-                            console.log('Showing filtered items on map');
-                            onShowItemsOnMap(items);
-                          }
-                        } else {
-                          console.log('No features found in filtered response');
-                          setQueryItems([]);
-                          // Clear map when no items match
-                          if (onShowItemsOnMap) {
-                            onShowItemsOnMap([]);
-                          }
-                        }
-                      })
-                      .catch(error => {
-                        console.error('Error fetching filtered items:', error);
-                        setQueryItems([]);
-                      });
-                  }
+                  window.dispatchEvent(new CustomEvent('refetchQueryItems', { detail: { limit: itemLimitRef.current } }));
                 }}
               >
                 Apply
@@ -912,53 +830,10 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                   setStartDate('');
                   setEndDate('');
                   setAppliedDatetimeFilter('');
-                  
+                  // Dispatch event so SFEOSMap knows the datetime filter was cleared
+                  window.dispatchEvent(new CustomEvent('datetimeFilterChanged', { detail: { datetimeFilter: '' } }));
                   // Trigger refetch without datetime filter
-                  if (collection && collection.id) {
-                    const baseUrl = stacApiUrlRef.current || process.env.REACT_APP_STAC_API_BASE_URL || 'http://localhost:8080';
-                    const url = buildItemsUrl(baseUrl, collection.id, itemLimitRef.current, '');
-                    console.log('Fetching items without datetime filter from:', url);
-                    
-                    fetch(url)
-                      .then(response => {
-                        if (response.ok) {
-                          return response.json();
-                        } else {
-                          return response.text().then(text => {
-                            throw new Error(`Failed to fetch: ${response.status} - ${text}`);
-                          });
-                        }
-                      })
-                      .then(data => {
-                        console.log('Received unfiltered items data:', data);
-                        setNumberReturned(data.numberReturned || data.features?.length || 0);
-                        setNumberMatched(data.numberMatched || data.features?.length || 0);
-                        
-                        if (data.features && data.features.length > 0) {
-                          const items = processItems(data.features);
-                          console.log('Setting unfiltered query items:', items);
-                          setQueryItems(items);
-                          setSelectedItemId(null);
-                          
-                          // Show unfiltered items on map
-                          if (onShowItemsOnMap) {
-                            console.log('Showing unfiltered items on map');
-                            onShowItemsOnMap(items);
-                          }
-                        } else {
-                          console.log('No features found in unfiltered response');
-                          setQueryItems([]);
-                          // Clear map when no items match
-                          if (onShowItemsOnMap) {
-                            onShowItemsOnMap([]);
-                          }
-                        }
-                      })
-                      .catch(error => {
-                        console.error('Error fetching unfiltered items:', error);
-                        setQueryItems([]);
-                      });
-                  }
+                  window.dispatchEvent(new CustomEvent('refetchQueryItems', { detail: { limit: itemLimitRef.current } }));
                 }}
               >
                 Clear
