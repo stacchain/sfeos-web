@@ -115,6 +115,7 @@
   pointer-events: auto;
   height: calc(100vh - 40px);
   overflow-y: auto;
+  overflow-x: visible; /* allow popouts (e.g., datetime) to extend right */
   direction: rtl; /* place scrollbar on the left */
   padding-left: 6px; /* keep content clear of left scrollbar */
 }
