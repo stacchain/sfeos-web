@@ -355,6 +355,20 @@ function SFEOSMap() {
     }
   }, [clearGeometries, clearBboxLayer]);
 
+  // Switch the active STAC API and reset state
+  const handleSwitchApi = useCallback((newUrl) => {
+    try {
+      const trimmed = (newUrl || '').trim();
+      if (!trimmed) return;
+      stacApiUrlRef.current = trimmed;
+      setStacApiUrl(trimmed);
+      resetToInitialState();
+      setShowPublicLinks(false);
+    } catch (e) {
+      console.warn('Failed to switch API URL:', e);
+    }
+  }, [resetToInitialState]);
+
   const handleShowItemsOnMap = useCallback(async (event) => {
     try {
       console.log('📍 showItemsOnMap event received with', event?.detail?.items?.length, 'items');
@@ -1033,7 +1047,7 @@ function SFEOSMap() {
       {showPublicLinks && (
         <div className="public-links-box">
           <div className="public-links-header">
-            <span>Public API Links</span>
+            <div className="public-links-title">Public API Links</div>
             <button className="public-links-close" onClick={() => setShowPublicLinks(false)} title="Close">✕</button>
           </div>
           <div className="public-links-content">
@@ -1046,10 +1060,25 @@ function SFEOSMap() {
               )}
               <li><a href={`${stacApiUrl}/search?limit=${encodeURIComponent(currentItemLimit)}`} target="_blank" rel="noreferrer">/search?limit={currentItemLimit}</a></li>
             </ul>
+            <hr style={{ border: 'none', borderTop: '1px solid rgba(0,0,0,0.08)', margin: '8px 0' }} />
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 6 }}>Quick Switch APIs</div>
+            <ul>
+              <li>
+                <button type="button" className="public-link-button" onClick={() => handleSwitchApi('https://api.stac.worldpop.org')} title="Use WorldPop STAC API">
+                  🌍 https://api.stac.worldpop.org
+                </button>
+              </li>
+              <li>
+                <button type="button" className="public-link-button" onClick={() => handleSwitchApi('https://landsatlook.usgs.gov/stac-server')} title="Use USGS LandsatLook STAC API">
+                  🛰️ https://landsatlook.usgs.gov/stac-server
+                </button>
+              </li>
+            </ul>
           </div>
         </div>
       )}
       <UrlSearchBox
+        key={stacApiUrl}
         initialUrl={stacApiUrl}
         onUpdate={(newUrl) => {
           const trimmed = (newUrl || '').trim();

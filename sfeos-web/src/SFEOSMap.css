@@ -11,26 +11,28 @@
   position: absolute;
   top: 20px;
   right: 90px; /* sit just left of the controls bar */
-  width: 300px;
+  width: 280px; /* match left panel width */
   max-width: calc(100vw - 120px);
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.7);
   border: 1px solid rgba(0,0,0,0.08);
-  border-radius: 10px;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
   z-index: 1200;
   pointer-events: auto;
+  text-align: left;
 }
 
 .public-links-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.9);
+  padding: 12px 15px 8px 15px;
+  background: transparent;
   border-bottom: 1px solid rgba(0,0,0,0.06);
-  border-radius: 10px 10px 0 0;
+  border-radius: 12px 12px 0 0;
   font-weight: 600;
   font-size: 0.85rem;
+  text-align: left;
 }
 
 .public-links-close {
@@ -50,17 +52,19 @@
 .public-links-close:hover { color: #000; }
 
 .public-links-content {
-  padding: 10px 12px 12px 12px;
+  padding: 10px 15px 15px 15px;
+  text-align: left;
 }
 
 .public-links-content ul {
   margin: 0;
-  padding: 0 0 0 14px;
+  padding: 0;
+  list-style: none;
 }
 
 .public-links-content li { 
-  margin-bottom: 6px; 
-  font-size: 0.8rem; 
+  margin-bottom: 4px; 
+  font-size: 0.78rem; 
 }
 
 .public-links-content a { 
@@ -70,6 +74,24 @@
 
 .public-links-content a:hover { 
   text-decoration: underline; 
+}
+
+/* Quick-switch API buttons: look like links, no box */
+.public-link-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  font-size: 0.78rem;
+  color: #2c5aa0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.public-link-button:hover {
+  text-decoration: underline;
+  color: #1d4f91;
 }
 
 /* Ensure the map takes full space of its container */
