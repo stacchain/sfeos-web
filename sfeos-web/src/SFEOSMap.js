@@ -956,7 +956,24 @@ function SFEOSMap() {
           return { url };
         }}
       />
-      <StacClient stacApiUrl={stacApiUrl} />
+      <div className="left-panels-wrapper">
+        <LogoOverlay />
+        <StacClient stacApiUrl={stacApiUrl} />
+        {itemDetails && (
+          <ItemDetailsOverlay 
+            details={itemDetails}
+            onClose={() => setItemDetails(null)}
+          />
+        )}
+        {thumbnail.title && (
+          <ThumbnailOverlay 
+            url={thumbnail.url} 
+            title={thumbnail.title}
+            type={thumbnail.type}
+            onClose={() => setThumbnail({ url: null, title: '', type: null })}
+          />
+        )}
+      </div>
       <div className="map-controls">
         <div className="control-section">
           <div className="control-label">View</div>
@@ -993,15 +1010,6 @@ function SFEOSMap() {
           </button>
         </div>
       </div>
-      <LogoOverlay />
-      {thumbnail.title && (
-        <ThumbnailOverlay 
-          url={thumbnail.url} 
-          title={thumbnail.title}
-          type={thumbnail.type}
-          onClose={() => setThumbnail({ url: null, title: '', type: null })}
-        />
-      )}
       {mapThumbnail.url && (
         <MapThumbnailOverlay
           mapRef={mapRef}
@@ -1009,12 +1017,6 @@ function SFEOSMap() {
           thumbnailUrl={mapThumbnail.url}
           title={mapThumbnail.title}
           type={mapThumbnail.type}
-        />
-      )}
-      {itemDetails && (
-        <ItemDetailsOverlay 
-          details={itemDetails}
-          onClose={() => setItemDetails(null)}
         />
       )}
       <UrlSearchBox
