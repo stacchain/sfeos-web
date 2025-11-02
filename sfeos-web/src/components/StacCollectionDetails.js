@@ -5,6 +5,7 @@ import './QueryItems.css';
 function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, stacApiUrl }) {
   const [isDescriptionExpanded, setIsDescriptionExpanded] = useState(false);
   const [isBoundingBoxVisible, setIsBoundingBoxVisible] = useState(false);
+  const [isTemporalExtentVisible, setIsTemporalExtentVisible] = useState(false);
   const [isQueryItemsVisible, setIsQueryItemsVisible] = useState(false);
   const [queryItems, setQueryItems] = useState([]);
   const [itemLimit, setItemLimit] = useState(10);
@@ -12,9 +13,15 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
   const [isBboxModeOn, setIsBboxModeOn] = useState(false);
   const [numberReturned, setNumberReturned] = useState(null);
   const [numberMatched, setNumberMatched] = useState(null);
+  const [visibleThumbnailItemId, setVisibleThumbnailItemId] = useState(null);
+  const [isDatetimePickerOpen, setIsDatetimePickerOpen] = useState(false);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [appliedDatetimeFilter, setAppliedDatetimeFilter] = useState('');
   const prevCollectionId = useRef(null);
   const stacApiUrlRef = useRef(stacApiUrl);
   const itemLimitRef = useRef(itemLimit);
+  const appliedDatetimeFilterRef = useRef('');
 
   useEffect(() => {
     stacApiUrlRef.current = stacApiUrl;
@@ -23,6 +30,10 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
   useEffect(() => {
     itemLimitRef.current = itemLimit;
   }, [itemLimit]);
+
+  useEffect(() => {
+    appliedDatetimeFilterRef.current = appliedDatetimeFilter;
+  }, [appliedDatetimeFilter]);
 
   // Detect collection changes and reset state
   useEffect(() => {
@@ -48,7 +59,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
         try {
           const baseUrl = stacApiUrlRef.current || process.env.REACT_APP_STAC_API_BASE_URL || 'http://localhost:8080';
           const currentLimit = itemLimitRef.current;
-          const url = `${baseUrl}/collections/${collection.id}/items?limit=${currentLimit}`;
+          const datetimeFilter = appliedDatetimeFilterRef.current;
+          const url = buildItemsUrl(baseUrl, collection.id, currentLimit, datetimeFilter);
           console.log(`Fetching items from: ${url}`);
           
           const response = await fetch(url);
@@ -287,10 +299,81 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     return () => window.removeEventListener('showItemsOnMap', handler);
   }, []);
 
+  // Helper function to build API URL with datetime filter
+  const buildItemsUrl = (baseUrl, collectionId, limit, datetimeFilter) => {
+    let url = `${baseUrl}/collections/${collectionId}/items?limit=${limit}`;
+    if (datetimeFilter) {
+      url += `&datetime=${encodeURIComponent(datetimeFilter)}`;
+    }
+    return url;
+  };
+
+  // Helper function to process items from API response
+  const processItems = (features) => {
+    return features.map(item => {
+      let thumbnailUrl = null;
+      let thumbnailType = null;
+      try {
+        const assets = item.assets || {};
+        const assetsArr = Object.values(assets);
+        if (assets.thumbnail && assets.thumbnail.href) {
+          thumbnailUrl = assets.thumbnail.href;
+          thumbnailType = assets.thumbnail.type || null;
+        }
+        if (!thumbnailUrl) {
+          const thumbAssetWeb = assetsArr.find(a => {
+            const roles = Array.isArray(a.roles) ? a.roles : [];
+            const type = (a.type || '').toLowerCase();
+            return roles.includes('thumbnail') && (type.startsWith('image/jpeg') || type.startsWith('image/png'));
+          });
+          if (thumbAssetWeb) {
+            thumbnailUrl = thumbAssetWeb.href;
+            thumbnailType = thumbAssetWeb.type || null;
+          }
+        }
+        if (!thumbnailUrl) {
+          const thumbAny = assetsArr.find(a => {
+            const roles = Array.isArray(a.roles) ? a.roles : [];
+            return roles.includes('thumbnail') && a.href;
+          });
+          if (thumbAny) {
+            thumbnailUrl = thumbAny.href;
+            thumbnailType = thumbAny.type || null;
+          }
+        }
+        if (!thumbnailUrl && Array.isArray(item.links)) {
+          const link = item.links.find(l => l.rel === 'thumbnail' || l.rel === 'preview');
+          if (link && link.href) {
+            thumbnailUrl = link.href;
+            thumbnailType = link.type || null;
+          }
+        }
+      } catch (e) {
+        console.warn('Error extracting thumbnail:', e);
+      }
+      return {
+        id: item.id,
+        title: item.properties?.title || item.id,
+        geometry: item.geometry || null,
+        bbox: item.bbox || null,
+        thumbnailUrl,
+        thumbnailType,
+        datetime: item.properties?.datetime || item.properties?.start_datetime || null,
+        assetsCount: Object.keys(item.assets || {}).length
+      };
+    });
+  };
+
   if (!collection) return null;
 
   const bbox = collection.extent?.spatial?.bbox?.[0];
   const hasValidBbox = bbox && bbox.length === 4;
+
+  // Extract temporal extent
+  const temporalExtent = collection.extent?.temporal?.interval?.[0];
+  const hasValidTemporalExtent = temporalExtent && temporalExtent.length === 2;
+  const startTime = temporalExtent?.[0];
+  const endTime = temporalExtent?.[1];
 
   const handleZoomToBbox = () => {
     if (hasValidBbox && onZoomToBbox) {
@@ -303,6 +386,9 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     if (isBoundingBoxVisible) {
       setIsBoundingBoxVisible(false);
     }
+    if (isTemporalExtentVisible) {
+      setIsTemporalExtentVisible(false);
+    }
     if (isQueryItemsVisible) {
       setIsQueryItemsVisible(false);
     }
@@ -312,6 +398,22 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     setIsBoundingBoxVisible(!isBoundingBoxVisible);
     if (isDescriptionExpanded) {
       setIsDescriptionExpanded(false);
+    }
+    if (isTemporalExtentVisible) {
+      setIsTemporalExtentVisible(false);
+    }
+    if (isQueryItemsVisible) {
+      setIsQueryItemsVisible(false);
+    }
+  };
+
+  const handleTemporalExtentClick = () => {
+    setIsTemporalExtentVisible(!isTemporalExtentVisible);
+    if (isDescriptionExpanded) {
+      setIsDescriptionExpanded(false);
+    }
+    if (isBoundingBoxVisible) {
+      setIsBoundingBoxVisible(false);
     }
     if (isQueryItemsVisible) {
       setIsQueryItemsVisible(false);
@@ -381,10 +483,12 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
     // Close any open overlays when selecting an item
     try {
       window.dispatchEvent(new CustomEvent('hideOverlays'));
+      window.dispatchEvent(new CustomEvent('hideMapThumbnail'));
     } catch (err) {
       console.warn('Failed to dispatch hideOverlays on item click:', err);
     }
     setSelectedItemId(item.id);
+    setVisibleThumbnailItemId(null);
     
     // Show only this item on the map
     if (onShowItemsOnMap) {
@@ -392,14 +496,14 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
       onShowItemsOnMap([item]);
     }
     
-    // Zoom to the item's bbox if available
+    // Zoom to the item's bbox if available with better zoom level
     if (item.bbox) {
       const zoomEvent = new CustomEvent('zoomToBbox', { 
         detail: { 
           bbox: item.bbox,
           options: {
             padding: 50,
-            maxZoom: 14,
+            maxZoom: 18,
             essential: true
           }
         } 
@@ -407,23 +511,97 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
       console.log('Zooming to item bbox:', item.bbox);
       window.dispatchEvent(zoomEvent);
     }
+  };
 
-    // Show thumbnail overlay if available
-    if (item.thumbnailUrl) {
-      const thumbEvent = new CustomEvent('showItemThumbnail', {
-        detail: {
-          url: item.thumbnailUrl,
-          title: item.title || item.id,
-          type: item.thumbnailType || null
-        }
+  const handleEyeButtonClick = (e, item) => {
+    e.stopPropagation();
+    
+    // Toggle thumbnail visibility for this item
+    if (visibleThumbnailItemId === item.id) {
+      // Hide thumbnail
+      setVisibleThumbnailItemId(null);
+      window.dispatchEvent(new CustomEvent('hideOverlays'));
+      window.dispatchEvent(new CustomEvent('hideMapThumbnail'));
+      // Show all items again
+      if (onShowItemsOnMap) {
+        console.log('Showing all query items on map');
+        onShowItemsOnMap(queryItems);
+      }
+    } else {
+      // Show thumbnail
+      setVisibleThumbnailItemId(item.id);
+      
+      // Hide item geometries on the map by dispatching empty items event
+      const hideGeometriesEvent = new CustomEvent('showItemsOnMap', {
+        detail: { items: [] }
       });
-      console.log('Dispatching showItemThumbnail with URL:', item.thumbnailUrl);
-      window.dispatchEvent(thumbEvent);
+      console.log('Hiding item geometries for thumbnail overlay');
+      window.dispatchEvent(hideGeometriesEvent);
+      
+      // Show thumbnail overlay if available
+      if (item.thumbnailUrl) {
+        const thumbEvent = new CustomEvent('showItemThumbnail', {
+          detail: {
+            url: item.thumbnailUrl,
+            title: item.title || item.id,
+            type: item.thumbnailType || null
+          }
+        });
+        console.log('Dispatching showItemThumbnail with URL:', item.thumbnailUrl);
+        window.dispatchEvent(thumbEvent);
+      }
+
+      // Show thumbnail on map if available and has geometry
+      if (item.thumbnailUrl && item.geometry) {
+        const mapThumbEvent = new CustomEvent('showMapThumbnail', {
+          detail: {
+            geometry: item.geometry,
+            url: item.thumbnailUrl,
+            title: item.title || item.id,
+            type: item.thumbnailType || null
+          }
+        });
+        console.log('Dispatching showMapThumbnail with geometry:', item.geometry);
+        window.dispatchEvent(mapThumbEvent);
+      }
     }
   };
 
   return (
     <>
+      {hasValidTemporalExtent && (
+        <div className="temporal-extent" onClick={handleTemporalExtentClick}>
+          <button 
+            className="stac-expand-btn"
+            title={isTemporalExtentVisible ? "Hide temporal extent" : "Show temporal extent"}
+          >
+            <span className="expand-arrow">{isTemporalExtentVisible ? '◀' : '▶'}</span>
+            <span className="expand-label">
+              Temporal Range
+              {startTime && endTime && (
+                <span className="temporal-range-bracket">
+                  ({new Date(startTime).toLocaleDateString()} / {new Date(endTime).toLocaleDateString()})
+                </span>
+              )}
+            </span>
+          </button>
+          {isTemporalExtentVisible && (
+            <div className="stac-details-expanded temporal-extent-expanded">
+              <div className="temporal-extent-content">
+                <div className="temporal-extent-item">
+                  <span className="temporal-extent-key">Start:</span>
+                  <span className="temporal-extent-value">{new Date(startTime).toLocaleString()}</span>
+                </div>
+                <div className="temporal-extent-item">
+                  <span className="temporal-extent-key">End:</span>
+                  <span className="temporal-extent-value">{new Date(endTime).toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      
       <div className="description" onClick={handleDescriptionClick}>
         <button 
           className="stac-expand-btn"
@@ -466,6 +644,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           </div>
         )}
       </div>
+
       
       <div className="query-items">
         <button 
@@ -551,6 +730,18 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
               >
                 BBOX: {isBboxModeOn ? 'ON' : 'OFF'}
               </button>
+              <button
+                type="button"
+                className={`datetime-btn ${appliedDatetimeFilter ? 'datetime-active' : 'datetime-inactive'}`}
+                title={appliedDatetimeFilter ? `Filter active: ${appliedDatetimeFilter}` : "Filter by datetime"}
+                aria-label={appliedDatetimeFilter ? `Filter active: ${appliedDatetimeFilter}` : "Filter by datetime"}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsDatetimePickerOpen(!isDatetimePickerOpen);
+                }}
+              >
+                📅
+              </button>
             </div>
             {(() => { console.log('Rendering Query Items list with', queryItems.length, 'items'); return queryItems.length > 0; })() ? (
               <ul>
@@ -565,23 +756,11 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                   >
                     <span className="item-title">{item.title}</span>
                     <button
-                      className="preview-btn"
-                      title={item.thumbnailUrl ? 'Show thumbnail' : 'No thumbnail available'}
-                      aria-label={item.thumbnailUrl ? 'Show thumbnail' : 'No thumbnail available'}
+                      className={`preview-btn ${visibleThumbnailItemId === item.id ? 'active' : ''}`}
+                      title={item.thumbnailUrl ? (visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail') : 'No thumbnail available'}
+                      aria-label={item.thumbnailUrl ? (visibleThumbnailItemId === item.id ? 'Hide thumbnail' : 'Show thumbnail') : 'No thumbnail available'}
                       disabled={!item.thumbnailUrl}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (item.thumbnailUrl) {
-                          const thumbEvent = new CustomEvent('showItemThumbnail', {
-                            detail: {
-                              url: item.thumbnailUrl,
-                              title: item.title || item.id,
-                              type: item.thumbnailType || null
-                            }
-                          });
-                          window.dispatchEvent(thumbEvent);
-                        }
-                      }}
+                      onClick={(e) => handleEyeButtonClick(e, item)}
                     >
                       👁
                     </button>
@@ -614,6 +793,180 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           </div>
         )}
       </div>
+      {isDatetimePickerOpen && (
+        <div className="datetime-filter-box">
+          <div className="datetime-filter-header">
+            <h3>Filter by Date</h3>
+            <button 
+              className="datetime-filter-close"
+              onClick={() => setIsDatetimePickerOpen(false)}
+              aria-label="Close datetime filter"
+            >
+              ✕
+            </button>
+          </div>
+          <div className="datetime-filter-content">
+            <div className="datetime-filter-group">
+              <label htmlFor="start-date">Start Date:</label>
+              <input
+                id="start-date"
+                type="datetime-local"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+              />
+            </div>
+            <div className="datetime-filter-group">
+              <label htmlFor="end-date">End Date:</label>
+              <input
+                id="end-date"
+                type="datetime-local"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+              />
+            </div>
+            <div className="datetime-filter-buttons">
+              <button
+                type="button"
+                className="datetime-apply-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Build datetime filter string in STAC format: start/end
+                  // Convert datetime-local format to ISO 8601 with Z suffix
+                  const formatDatetime = (dt) => {
+                    if (!dt) return null;
+                    // datetime-local format: "2025-01-15T10:30" -> ISO 8601: "2025-01-15T10:30:00Z"
+                    return dt.includes('T') ? `${dt}:00Z` : `${dt}T00:00:00Z`;
+                  };
+                  
+                  let datetimeFilter = '';
+                  const formattedStart = formatDatetime(startDate);
+                  const formattedEnd = formatDatetime(endDate);
+                  
+                  if (formattedStart && formattedEnd) {
+                    datetimeFilter = `${formattedStart}/${formattedEnd}`;
+                  } else if (formattedStart) {
+                    datetimeFilter = `${formattedStart}/..`;
+                  } else if (formattedEnd) {
+                    datetimeFilter = `../${formattedEnd}`;
+                  }
+                  
+                  console.log('Datetime filter applied:', { startDate, endDate, formattedStart, formattedEnd, datetimeFilter });
+                  setAppliedDatetimeFilter(datetimeFilter);
+                  setIsDatetimePickerOpen(false);
+                  
+                  // Trigger refetch with the new datetime filter
+                  if (collection && collection.id) {
+                    const baseUrl = stacApiUrlRef.current || process.env.REACT_APP_STAC_API_BASE_URL || 'http://localhost:8080';
+                    const url = buildItemsUrl(baseUrl, collection.id, itemLimitRef.current, datetimeFilter);
+                    console.log('Fetching items with datetime filter from:', url);
+                    
+                    fetch(url)
+                      .then(response => {
+                        if (response.ok) {
+                          return response.json();
+                        } else {
+                          return response.text().then(text => {
+                            throw new Error(`Failed to fetch: ${response.status} - ${text}`);
+                          });
+                        }
+                      })
+                      .then(data => {
+                        console.log('Received filtered items data:', data);
+                        setNumberReturned(data.numberReturned || data.features?.length || 0);
+                        setNumberMatched(data.numberMatched || data.features?.length || 0);
+                        
+                        if (data.features && data.features.length > 0) {
+                          const items = processItems(data.features);
+                          console.log('Setting filtered query items:', items);
+                          setQueryItems(items);
+                          setSelectedItemId(null);
+                          
+                          // Show filtered items on map
+                          if (onShowItemsOnMap) {
+                            console.log('Showing filtered items on map');
+                            onShowItemsOnMap(items);
+                          }
+                        } else {
+                          console.log('No features found in filtered response');
+                          setQueryItems([]);
+                          // Clear map when no items match
+                          if (onShowItemsOnMap) {
+                            onShowItemsOnMap([]);
+                          }
+                        }
+                      })
+                      .catch(error => {
+                        console.error('Error fetching filtered items:', error);
+                        setQueryItems([]);
+                      });
+                  }
+                }}
+              >
+                Apply
+              </button>
+              <button
+                type="button"
+                className="datetime-clear-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setStartDate('');
+                  setEndDate('');
+                  setAppliedDatetimeFilter('');
+                  
+                  // Trigger refetch without datetime filter
+                  if (collection && collection.id) {
+                    const baseUrl = stacApiUrlRef.current || process.env.REACT_APP_STAC_API_BASE_URL || 'http://localhost:8080';
+                    const url = buildItemsUrl(baseUrl, collection.id, itemLimitRef.current, '');
+                    console.log('Fetching items without datetime filter from:', url);
+                    
+                    fetch(url)
+                      .then(response => {
+                        if (response.ok) {
+                          return response.json();
+                        } else {
+                          return response.text().then(text => {
+                            throw new Error(`Failed to fetch: ${response.status} - ${text}`);
+                          });
+                        }
+                      })
+                      .then(data => {
+                        console.log('Received unfiltered items data:', data);
+                        setNumberReturned(data.numberReturned || data.features?.length || 0);
+                        setNumberMatched(data.numberMatched || data.features?.length || 0);
+                        
+                        if (data.features && data.features.length > 0) {
+                          const items = processItems(data.features);
+                          console.log('Setting unfiltered query items:', items);
+                          setQueryItems(items);
+                          setSelectedItemId(null);
+                          
+                          // Show unfiltered items on map
+                          if (onShowItemsOnMap) {
+                            console.log('Showing unfiltered items on map');
+                            onShowItemsOnMap(items);
+                          }
+                        } else {
+                          console.log('No features found in unfiltered response');
+                          setQueryItems([]);
+                          // Clear map when no items match
+                          if (onShowItemsOnMap) {
+                            onShowItemsOnMap([]);
+                          }
+                        }
+                      })
+                      .catch(error => {
+                        console.error('Error fetching unfiltered items:', error);
+                        setQueryItems([]);
+                      });
+                  }
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }
