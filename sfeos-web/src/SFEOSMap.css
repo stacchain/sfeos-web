@@ -22,13 +22,40 @@
   position: absolute;
   top: 20px;
   left: 20px;
-  width: auto;
+  width: 280px;
   z-index: 1000;
-  pointer-events: none;
+  pointer-events: auto;
+  height: calc(100vh - 40px);
+  overflow-y: auto;
+  direction: rtl; /* place scrollbar on the left */
+  padding-left: 6px; /* keep content clear of left scrollbar */
 }
 
 .left-panels-wrapper > * {
   pointer-events: auto;
+  direction: ltr; /* keep child content normal */
+}
+
+/* Light, slightly transparent left scrollbar */
+.left-panels-wrapper::-webkit-scrollbar {
+  width: 10px;
+}
+
+.left-panels-wrapper::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 8px;
+}
+
+.left-panels-wrapper::-webkit-scrollbar-thumb {
+  background: rgba(150, 150, 150, 0.45); /* lighter gray, semi-transparent */
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.6); /* soften against content */
+}
+
+/* Firefox */
+.left-panels-wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(150, 150, 150, 0.45) rgba(0, 0, 0, 0.05);
 }
 
 
