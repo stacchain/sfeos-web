@@ -49,6 +49,7 @@ function SFEOSMap() {
   const [currentItemLimit, setCurrentItemLimit] = useState(10);
   const [stacApiUrl, setStacApiUrl] = useState(getInitialStacApiUrl);
   const [mapThumbnail, setMapThumbnail] = useState({ geometry: null, url: null, title: '', type: null });
+  const [showPublicLinks, setShowPublicLinks] = useState(false);
   
   // Refs
   const mapRef = useRef(null);
@@ -1009,6 +1010,16 @@ function SFEOSMap() {
             🔗
           </button>
         </div>
+        <div className="control-section">
+          <div className="control-label">Public APIs</div>
+          <button
+            className="url-toggle-btn"
+            onClick={() => setShowPublicLinks(v => !v)}
+            title={showPublicLinks ? 'Hide public API links' : 'Show public API links'}
+          >
+            🌐
+          </button>
+        </div>
       </div>
       {mapThumbnail.url && (
         <MapThumbnailOverlay
@@ -1018,6 +1029,25 @@ function SFEOSMap() {
           title={mapThumbnail.title}
           type={mapThumbnail.type}
         />
+      )}
+      {showPublicLinks && (
+        <div className="public-links-box">
+          <div className="public-links-header">
+            <span>Public API Links</span>
+            <button className="public-links-close" onClick={() => setShowPublicLinks(false)} title="Close">✕</button>
+          </div>
+          <div className="public-links-content">
+            <ul>
+              <li><a href={`${stacApiUrl}`} target="_blank" rel="noreferrer">Base: {stacApiUrl}</a></li>
+              <li><a href={`${stacApiUrl}/conformance`} target="_blank" rel="noreferrer">/conformance</a></li>
+              <li><a href={`${stacApiUrl}/collections`} target="_blank" rel="noreferrer">/collections</a></li>
+              {selectedCollectionId && (
+                <li><a href={`${stacApiUrl}/collections/${encodeURIComponent(selectedCollectionId)}/items?limit=${encodeURIComponent(currentItemLimit)}`} target="_blank" rel="noreferrer">/collections/{selectedCollectionId}/items</a></li>
+              )}
+              <li><a href={`${stacApiUrl}/search?limit=${encodeURIComponent(currentItemLimit)}`} target="_blank" rel="noreferrer">/search?limit={currentItemLimit}</a></li>
+            </ul>
+          </div>
+        </div>
       )}
       <UrlSearchBox
         initialUrl={stacApiUrl}
