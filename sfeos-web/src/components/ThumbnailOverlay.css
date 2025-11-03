@@ -16,11 +16,11 @@
 .thumbnail-card {
   background: rgba(255, 255, 255, 0.55); /* match transparency */
   border-radius: 10px;
+  border: 0.5px solid green;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   width: 280px; /* slightly smaller */
   max-width: calc(100vw - 40px);
-  border: 1px solid rgba(0,0,0,0.08);
   text-align: left; /* align text left */
 }
 
