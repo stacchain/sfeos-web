@@ -670,7 +670,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
               <div>
                 <h4 style={{ margin: '0 0 5px 0' }}>Query Items</h4>
                 {(numberReturned !== null || numberMatched !== null) && (
-                  <p style={{ margin: 0, fontSize: '0.85em', color: '#666' }}>
+                  <p className="query-items-results">
                     {numberReturned !== null && numberMatched !== null
                       ? `Returned: ${numberReturned} / Matched: ${numberMatched}`
                       : numberReturned !== null
