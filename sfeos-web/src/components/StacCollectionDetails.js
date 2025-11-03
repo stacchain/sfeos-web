@@ -543,7 +543,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             </span>
           </button>
           {isTemporalExtentVisible && (
-            <div className="stac-details-expanded temporal-extent-expanded">
+            <div className="stac-details-expanded">
               <div className="temporal-extent-content">
                 <div className="temporal-extent-item">
                   <span className="temporal-extent-key">Start:</span>
