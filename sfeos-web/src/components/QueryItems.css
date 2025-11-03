@@ -183,9 +183,11 @@
 }
 
 .limit-input {
-  width: 60px;
-  padding: 4px 6px;
-  font-size: 0.6rem;
+  width: 72px; /* wider so spinner isn't clipped */
+  padding: 6px 8px; /* taller padding for spinner visibility */
+  font-size: 0.7rem;
+  height: 28px; /* ensure full control height */
+  line-height: 1.2;
   border: 1px solid #ccc;
   border-radius: 4px;
   box-sizing: border-box;
