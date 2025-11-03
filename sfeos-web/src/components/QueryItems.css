@@ -233,16 +233,14 @@
 }
 
 .datetime-filter-box {
-  position: fixed; /* detach from overflow/stacking of left column */
-  top: 185px;
-  left: calc(20px + 280px + 20px); /* left gutter + panel width + gap */
+  margin-top: 8px;
   z-index: 1500; /* above left panels and controls */
-  background: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.25);
   border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 10px;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   width: 280px;
-  max-width: calc(100vw - (20px + 280px + 40px));
+  max-width: calc(100vw - 40px);
   pointer-events: auto;
 }
 
@@ -251,7 +249,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.25);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 10px 10px 0 0;
 }
