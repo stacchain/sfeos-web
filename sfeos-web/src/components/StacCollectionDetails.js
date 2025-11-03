@@ -73,8 +73,10 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             console.log('Received items data:', data);
             
             // Capture search result counts
-            setNumberReturned(data.numberReturned || data.features?.length || 0);
-            setNumberMatched(data.numberMatched || data.features?.length || 0);
+            const nr = data?.numberReturned;
+            const nm = data?.numberMatched;
+            setNumberReturned(nr != null ? nr : (Array.isArray(data.features) ? data.features.length : null));
+            setNumberMatched(nm != null ? nm : null);
             try {
               const next = Array.isArray(data.links) ? data.links.find(l => l.rel === 'next' && l.href) : null;
               setNextLink(next?.href || null);
@@ -183,9 +185,11 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           const data = await response.json();
           console.log('Response data features count:', data.features?.length);
           
-          // Capture search result counts
-          setNumberReturned(data.numberReturned || data.features?.length || 0);
-          setNumberMatched(data.numberMatched || data.features?.length || 0);
+          // Capture search result counts (null-safe)
+          const rr = data?.numberReturned;
+          const rm = data?.numberMatched;
+          setNumberReturned(rr != null ? rr : (Array.isArray(data.features) ? data.features.length : null));
+          setNumberMatched(rm != null ? rm : null);
           try {
             const next = Array.isArray(data.links) ? data.links.find(l => l.rel === 'next' && l.href) : null;
             setNextLink(next?.href || null);
@@ -659,7 +663,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             Query Items
             {(numberReturned !== null || numberMatched !== null) && (
               <span className="query-items-count">
-                ({numberReturned !== null ? numberReturned : '?'}/{numberMatched !== null ? numberMatched : '?'})
+                ({numberReturned !== null ? numberReturned : '?'}/{numberMatched !== null ? numberMatched : 'Not provided'})
               </span>
             )}
           </span>
@@ -674,7 +678,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                     {numberReturned !== null && numberMatched !== null
                       ? `Returned: ${numberReturned} / Matched: ${numberMatched}`
                       : numberReturned !== null
-                      ? `Returned: ${numberReturned}`
+                      ? `Returned: ${numberReturned} / Matched: Not provided`
                       : numberMatched !== null
                       ? `Matched: ${numberMatched}`
                       : ''}
