@@ -133,7 +133,7 @@
 }
 
 .limit-input-container label {
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   font-weight: 600;
   color: #333;
   white-space: nowrap;
@@ -185,7 +185,7 @@
 .limit-input {
   width: 60px;
   padding: 4px 6px;
-  font-size: 0.7rem;
+  font-size: 0.6rem;
   border: 1px solid #ccc;
   border-radius: 4px;
   box-sizing: border-box;
@@ -203,7 +203,7 @@
   color: #000;
   border-radius: 6px;
   padding: 4px 8px;
-  font-size: 1rem;
+  font-size: 0.8rem;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -307,10 +307,16 @@
   background: rgba(255, 255, 255, 0.9);
 }
 
-.datetime-filter-group input:focus {
-  outline: none;
-  border-color: #4a90e2;
-  box-shadow: 0 0 4px rgba(74, 144, 226, 0.3);
+.query-items-count {
+  font-size: 0.85em;
+  margin-left: 8px;
+  color: #666;
+}
+
+.query-items-results {
+  margin: 0;
+  font-size: 0.85em;
+  color: #666;
 }
 
 .datetime-filter-buttons {
