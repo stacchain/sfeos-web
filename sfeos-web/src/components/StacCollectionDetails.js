@@ -747,7 +747,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                   }
                 }}
               >
-                BBOX: {isBboxModeOn ? 'ON' : 'OFF'}
+                BBOX
               </button>
               <button
                 type="button"
