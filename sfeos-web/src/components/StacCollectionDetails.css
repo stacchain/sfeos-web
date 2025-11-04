@@ -10,7 +10,7 @@
   transition: color 0.2s;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
 }
 
 .stac-expand-btn:hover {

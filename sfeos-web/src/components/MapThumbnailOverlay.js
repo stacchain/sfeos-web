@@ -4,7 +4,6 @@ import './MapThumbnailOverlay.css';
 function MapThumbnailOverlay({ mapRef, itemGeometry, thumbnailUrl, title, type }) {
   const [mapContainer, setMapContainer] = useState(null);
   const [pixelPos, setPixelPos] = useState(null);
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   const [imageVerified, setImageVerified] = useState(false);
 
@@ -191,7 +190,6 @@ function MapThumbnailOverlay({ mapRef, itemGeometry, thumbnailUrl, title, type }
           className="map-thumbnail-image"
           onLoad={() => {
             console.log('Image loaded successfully:', thumbnailUrl);
-            setImageLoaded(true);
           }}
           onError={() => {
             console.warn('Failed to load image:', thumbnailUrl);

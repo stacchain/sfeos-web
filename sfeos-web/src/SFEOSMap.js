@@ -49,6 +49,7 @@ function SFEOSMap() {
   const [currentItemLimit, setCurrentItemLimit] = useState(10);
   const [stacApiUrl, setStacApiUrl] = useState(getInitialStacApiUrl);
   const [mapThumbnail, setMapThumbnail] = useState({ geometry: null, url: null, title: '', type: null });
+  const [showPublicLinks, setShowPublicLinks] = useState(false);
   
   // Refs
   const mapRef = useRef(null);
@@ -353,6 +354,20 @@ function SFEOSMap() {
       }
     }
   }, [clearGeometries, clearBboxLayer]);
+
+  // Switch the active STAC API and reset state
+  const handleSwitchApi = useCallback((newUrl) => {
+    try {
+      const trimmed = (newUrl || '').trim();
+      if (!trimmed) return;
+      stacApiUrlRef.current = trimmed;
+      setStacApiUrl(trimmed);
+      resetToInitialState();
+      setShowPublicLinks(false);
+    } catch (e) {
+      console.warn('Failed to switch API URL:', e);
+    }
+  }, [resetToInitialState]);
 
   const handleShowItemsOnMap = useCallback(async (event) => {
     try {
@@ -956,7 +971,24 @@ function SFEOSMap() {
           return { url };
         }}
       />
-      <StacClient stacApiUrl={stacApiUrl} />
+      <div className="left-panels-wrapper">
+        <LogoOverlay />
+        <StacClient stacApiUrl={stacApiUrl} />
+        {itemDetails && (
+          <ItemDetailsOverlay 
+            details={itemDetails}
+            onClose={() => setItemDetails(null)}
+          />
+        )}
+        {thumbnail.title && (
+          <ThumbnailOverlay 
+            url={thumbnail.url} 
+            title={thumbnail.title}
+            type={thumbnail.type}
+            onClose={() => setThumbnail({ url: null, title: '', type: null })}
+          />
+        )}
+      </div>
       <div className="map-controls">
         <div className="control-section">
           <div className="control-label">View</div>
@@ -992,16 +1024,17 @@ function SFEOSMap() {
             🔗
           </button>
         </div>
+        <div className="control-section">
+          <div className="control-label">Public APIs</div>
+          <button
+            className="url-toggle-btn"
+            onClick={() => setShowPublicLinks(v => !v)}
+            title={showPublicLinks ? 'Hide public API links' : 'Show public API links'}
+          >
+            🌐
+          </button>
+        </div>
       </div>
-      <LogoOverlay />
-      {thumbnail.title && (
-        <ThumbnailOverlay 
-          url={thumbnail.url} 
-          title={thumbnail.title}
-          type={thumbnail.type}
-          onClose={() => setThumbnail({ url: null, title: '', type: null })}
-        />
-      )}
       {mapThumbnail.url && (
         <MapThumbnailOverlay
           mapRef={mapRef}
@@ -1011,13 +1044,41 @@ function SFEOSMap() {
           type={mapThumbnail.type}
         />
       )}
-      {itemDetails && (
-        <ItemDetailsOverlay 
-          details={itemDetails}
-          onClose={() => setItemDetails(null)}
-        />
+      {showPublicLinks && (
+        <div className="public-links-box">
+          <div className="public-links-header">
+            <div className="public-links-title">Public API Links</div>
+            <button className="public-links-close" onClick={() => setShowPublicLinks(false)} title="Close">✕</button>
+          </div>
+          <div className="public-links-content">
+            <ul>
+              <li><a href={`${stacApiUrl}`} target="_blank" rel="noreferrer">Base: {stacApiUrl}</a></li>
+              <li><a href={`${stacApiUrl}/conformance`} target="_blank" rel="noreferrer">/conformance</a></li>
+              <li><a href={`${stacApiUrl}/collections`} target="_blank" rel="noreferrer">/collections</a></li>
+              {selectedCollectionId && (
+                <li><a href={`${stacApiUrl}/collections/${encodeURIComponent(selectedCollectionId)}/items?limit=${encodeURIComponent(currentItemLimit)}`} target="_blank" rel="noreferrer">/collections/{selectedCollectionId}/items</a></li>
+              )}
+              <li><a href={`${stacApiUrl}/search?limit=${encodeURIComponent(currentItemLimit)}`} target="_blank" rel="noreferrer">/search?limit={currentItemLimit}</a></li>
+            </ul>
+            <hr style={{ border: 'none', borderTop: '1px solid rgba(0,0,0,0.08)', margin: '8px 0' }} />
+            <div style={{ fontSize: '0.8rem', fontWeight: 600, marginBottom: 6 }}>Quick Switch APIs</div>
+            <ul>
+              <li>
+                <button type="button" className="public-link-button" onClick={() => handleSwitchApi('https://api.stac.worldpop.org')} title="Use WorldPop STAC API">
+                  🌍 https://api.stac.worldpop.org
+                </button>
+              </li>
+              <li>
+                <button type="button" className="public-link-button" onClick={() => handleSwitchApi('https://landsatlook.usgs.gov/stac-server')} title="Use USGS LandsatLook STAC API">
+                  🛰️ https://landsatlook.usgs.gov/stac-server
+                </button>
+              </li>
+            </ul>
+          </div>
+        </div>
       )}
       <UrlSearchBox
+        key={stacApiUrl}
         initialUrl={stacApiUrl}
         onUpdate={(newUrl) => {
           const trimmed = (newUrl || '').trim();
