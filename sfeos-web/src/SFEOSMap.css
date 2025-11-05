@@ -87,11 +87,24 @@
   color: #2c5aa0;
   text-align: left;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
 }
 
 .public-link-button:hover {
   text-decoration: underline;
   color: #1d4f91;
+}
+
+.public-link-icon {
+  display: inline-block;
+  width: 1.25em; /* fixed icon column */
+  text-align: center;
+  margin-right: 6px;
+}
+
+.public-link-text {
+  display: inline-block;
 }
 
 /* Ensure the map takes full space of its container */

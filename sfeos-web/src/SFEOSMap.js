@@ -1065,12 +1065,20 @@ function SFEOSMap() {
             <ul>
               <li>
                 <button type="button" className="public-link-button" onClick={() => handleSwitchApi('https://api.stac.worldpop.org')} title="Use WorldPop STAC API">
-                  🌍 https://api.stac.worldpop.org
+                  <span className="public-link-icon">🌍</span>
+                  <span className="public-link-text">https://api.stac.worldpop.org</span>
                 </button>
               </li>
               <li>
                 <button type="button" className="public-link-button" onClick={() => handleSwitchApi('https://landsatlook.usgs.gov/stac-server')} title="Use USGS LandsatLook STAC API">
-                  🛰️ https://landsatlook.usgs.gov/stac-server
+                  <span className="public-link-icon">🛰️</span>
+                  <span className="public-link-text">https://landsatlook.usgs.gov/stac-server</span>
+                </button>
+              </li>
+              <li>
+                <button type="button" className="public-link-button" onClick={() => handleSwitchApi('https://stac.dataspace.copernicus.eu/v1')} title="Use Copernicus Dataspace STAC API">
+                  <span className="public-link-icon">🇪🇺</span>
+                  <span className="public-link-text">https://stac.dataspace.copernicus.eu/v1</span>
                 </button>
               </li>
             </ul>

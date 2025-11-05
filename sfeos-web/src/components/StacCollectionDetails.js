@@ -8,6 +8,8 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
   const [isTemporalExtentVisible, setIsTemporalExtentVisible] = useState(false);
   const [isQueryItemsVisible, setIsQueryItemsVisible] = useState(false);
   const [queryItems, setQueryItems] = useState([]);
+  const [nextLink, setNextLink] = useState(null);
+  const [isLoadingNext, setIsLoadingNext] = useState(false);
   const [itemLimit, setItemLimit] = useState(10);
   const [selectedItemId, setSelectedItemId] = useState(null);
   const [isBboxModeOn, setIsBboxModeOn] = useState(false);
@@ -71,8 +73,14 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             console.log('Received items data:', data);
             
             // Capture search result counts
-            setNumberReturned(data.numberReturned || data.features?.length || 0);
-            setNumberMatched(data.numberMatched || data.features?.length || 0);
+            const nr = data?.numberReturned;
+            const nm = data?.numberMatched;
+            setNumberReturned(nr != null ? nr : (Array.isArray(data.features) ? data.features.length : null));
+            setNumberMatched(nm != null ? nm : null);
+            try {
+              const next = Array.isArray(data.links) ? data.links.find(l => l.rel === 'next' && l.href) : null;
+              setNextLink(next?.href || null);
+            } catch {}
             
             if (data.features && data.features.length > 0) {
               const items = processItems(data.features);
@@ -82,15 +90,18 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             } else {
               console.log('No features found in the response');
               setQueryItems([]);
+              setNextLink(null);
             }
           } else {
             const errorText = await response.text();
             console.error(`Failed to fetch items (${response.status}):`, errorText);
             setQueryItems([]);
+            setNextLink(null);
           }
         } catch (error) {
           console.error('Error fetching items:', error);
           setQueryItems([]);
+          setNextLink(null);
         }
       };
       fetchItems();
@@ -98,6 +109,36 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
       console.log('No collection ID available to fetch items');
     }
   }, [collection]);
+
+  const handleLoadNext = async (e) => {
+    try {
+      e?.stopPropagation?.();
+      if (!nextLink || isLoadingNext) return;
+      setIsLoadingNext(true);
+      const resp = await fetch(nextLink, { method: 'GET' });
+      if (!resp.ok) throw new Error(`Next page failed: ${resp.status}`);
+      const data = await resp.json();
+      const newItems = processItems(Array.isArray(data.features) ? data.features : []);
+      setQueryItems(prev => {
+        const merged = [...prev, ...newItems];
+        try {
+          window.dispatchEvent(new CustomEvent('showItemsOnMap', { detail: { items: merged } }));
+        } catch {}
+        return merged;
+      });
+      if (data.numberReturned != null) setNumberReturned(data.numberReturned);
+      if (data.numberMatched != null) setNumberMatched(data.numberMatched);
+      try {
+        const next = Array.isArray(data.links) ? data.links.find(l => l.rel === 'next' && l.href) : null;
+        setNextLink(next?.href || null);
+      } catch {}
+      setIsLoadingNext(false);
+    } catch (err) {
+      console.error('Error loading next page:', err);
+      setIsLoadingNext(false);
+    }
+  };
+  
 
   // Listen for bboxModeChanged event to update button state
   useEffect(() => {
@@ -144,9 +185,15 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           const data = await response.json();
           console.log('Response data features count:', data.features?.length);
           
-          // Capture search result counts
-          setNumberReturned(data.numberReturned || data.features?.length || 0);
-          setNumberMatched(data.numberMatched || data.features?.length || 0);
+          // Capture search result counts (null-safe)
+          const rr = data?.numberReturned;
+          const rm = data?.numberMatched;
+          setNumberReturned(rr != null ? rr : (Array.isArray(data.features) ? data.features.length : null));
+          setNumberMatched(rm != null ? rm : null);
+          try {
+            const next = Array.isArray(data.links) ? data.links.find(l => l.rel === 'next' && l.href) : null;
+            setNextLink(next?.href || null);
+          } catch {}
           
           if (data.features && data.features.length > 0) {
             console.log('Processing', data.features.length, 'features');
@@ -159,9 +206,11 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             window.dispatchEvent(new CustomEvent('showItemsOnMap', { detail: { items } }));
           } else {
             console.warn('No features in response');
+            setNextLink(null);
           }
         } else {
           console.error('Response not ok:', response.status);
+          setNextLink(null);
         }
       } catch (err) {
         console.error('refetchQueryItems error:', err);
@@ -614,7 +663,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             Query Items
             {(numberReturned !== null || numberMatched !== null) && (
               <span className="query-items-count">
-                ({numberReturned !== null ? numberReturned : '?'}/{numberMatched !== null ? numberMatched : '?'})
+                ({numberReturned !== null ? numberReturned : '?'}/{numberMatched !== null ? numberMatched : 'Not provided'})
               </span>
             )}
           </span>
@@ -629,29 +678,41 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                     {numberReturned !== null && numberMatched !== null
                       ? `Returned: ${numberReturned} / Matched: ${numberMatched}`
                       : numberReturned !== null
-                      ? `Returned: ${numberReturned}`
+                      ? `Returned: ${numberReturned} / Matched: Not provided`
                       : numberMatched !== null
                       ? `Matched: ${numberMatched}`
                       : ''}
                   </p>
                 )}
               </div>
-              <button
-                type="button"
-                className="search-btn"
-                title="Search (bbox if drawn, else query items)"
-                aria-label="Search"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  try {
-                    window.dispatchEvent(new CustomEvent('runSearch', { detail: { limit: itemLimit } }));
-                  } catch (err) {
-                    console.warn('Failed to dispatch runSearch:', err);
-                  }
-                }}
-              >
-                🔎
-              </button>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  type="button"
+                  className="search-btn"
+                  title="Search (bbox if drawn, else query items)"
+                  aria-label="Search"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    try {
+                      window.dispatchEvent(new CustomEvent('runSearch', { detail: { limit: itemLimit } }));
+                    } catch (err) {
+                      console.warn('Failed to dispatch runSearch:', err);
+                    }
+                  }}
+                >
+                  🔎
+                </button>
+                <button
+                  type="button"
+                  className="bbox-btn"
+                  disabled={!nextLink || isLoadingNext}
+                  title={nextLink ? 'Load next page' : 'No more pages'}
+                  aria-label="Load next page"
+                  onClick={handleLoadNext}
+                >
+                  Next ▶
+                </button>
+              </div>
             </div>
             <div className="limit-input-container">
               <label htmlFor="item-limit">Limit:</label>
@@ -686,7 +747,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
                   }
                 }}
               >
-                BBOX: {isBboxModeOn ? 'ON' : 'OFF'}
+                BBOX
               </button>
               <button
                 type="button"
