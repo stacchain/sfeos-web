@@ -543,7 +543,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
             </span>
           </button>
           {isTemporalExtentVisible && (
-            <div className="stac-details-expanded temporal-extent-expanded">
+            <div className="stac-details-expanded">
               <div className="temporal-extent-content">
                 <div className="temporal-extent-item">
                   <span className="temporal-extent-key">Start:</span>
@@ -613,7 +613,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
           <span className="expand-label">
             Query Items
             {(numberReturned !== null || numberMatched !== null) && (
-              <span style={{ fontSize: '0.85em', marginLeft: '8px', color: '#666' }}>
+              <span className="query-items-count">
                 ({numberReturned !== null ? numberReturned : '?'}/{numberMatched !== null ? numberMatched : '?'})
               </span>
             )}
@@ -625,7 +625,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
               <div>
                 <h4 style={{ margin: '0 0 5px 0' }}>Query Items</h4>
                 {(numberReturned !== null || numberMatched !== null) && (
-                  <p style={{ margin: 0, fontSize: '0.85em', color: '#666' }}>
+                  <p className="query-items-results">
                     {numberReturned !== null && numberMatched !== null
                       ? `Returned: ${numberReturned} / Matched: ${numberMatched}`
                       : numberReturned !== null
@@ -657,6 +657,7 @@ function StacCollectionDetails({ collection, onZoomToBbox, onShowItemsOnMap, sta
               <label htmlFor="item-limit">Limit:</label>
               <input 
                 id="item-limit"
+                className="limit-input"
                 type="number" 
                 min="1" 
                 max="200" 

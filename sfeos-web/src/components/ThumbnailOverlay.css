@@ -1,7 +1,5 @@
 .thumbnail-overlay {
-  position: absolute;
-  top: 510px;
-  left: 0;
+  margin-top: 15px;
   z-index: 1001;
   display: flex;
   align-items: flex-start;
@@ -16,13 +14,13 @@
 }
 
 .thumbnail-card {
-  background: rgba(255, 255, 255, 0.7); /* match transparency */
-  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55); /* match transparency */
+  border-radius: 12px;
+  border: 0.5px solid green;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2);
   overflow: hidden;
   width: 280px; /* slightly smaller */
   max-width: calc(100vw - 40px);
-  border: 1px solid rgba(0,0,0,0.08);
   text-align: left; /* align text left */
 }
 
@@ -31,12 +29,12 @@
   align-items: center;
   justify-content: space-between;
   padding: 6px 12px; /* slightly tighter */
-  background: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.25);
   border-bottom: 1px solid rgba(0,0,0,0.06);
 }
 
 .thumbnail-title {
-  font-size: 0.7rem; /* smaller title */
+  font-size: 0.6rem; /* smaller title */
   color: #333;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -70,10 +68,10 @@
 /* Download/Open link styling for non-web-friendly thumbnails */
 .thumbnail-download-btn {
   display: inline-block;
-  font-size: 0.7rem;
-  padding: 4px 12px;
+  font-size: 0.6rem;
+  padding: 5px 15px;
   border: 1px solid rgba(0,0,0,0.2);
-  border-radius: 6px;
+  border-radius: 7px;
   color: #111;
   text-decoration: none;
   background: rgba(255,255,255,0.6);
